@@ -20,7 +20,13 @@ export interface KokoroWorkerConfig {
 }
 
 const cfg = JSON.parse(self.name) as KokoroWorkerConfig;
-if (cfg.installModelCacheFetch) installModelCacheFetch();
+if (cfg.installModelCacheFetch) {
+  installModelCacheFetch();
+  // The fetch cache already keeps every model file; transformers.js's own
+  // cache would store a second copy of the weights.
+  hfEnv.useBrowserCache = false;
+  void caches.delete("transformers-cache").catch(() => {});
+}
 const ortWasm = hfEnv.backends.onnx.wasm!;
 ortWasm.numThreads = cfg.ortWasm.numThreads;
 ortWasm.proxy = cfg.ortWasm.proxy;
