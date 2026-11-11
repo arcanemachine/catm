@@ -37,6 +37,7 @@ interface ReaderViewProps {
   onPlay: () => void;
   onRead: () => void;
   onCancel: () => void;
+  onKeep: () => void;
   onRename: (id: string, title: string) => void;
   onChangeVoice: (v: VoiceId) => void;
   liveChunkDurations: number[] | null;
@@ -59,6 +60,7 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
     onPlay,
     onRead,
     onCancel,
+    onKeep,
     onRename,
     liveChunkDurations,
     liveChunkTexts,
@@ -223,6 +225,17 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
             ) : null
           ) : null}
           {isStale ? <span className="chip-sm warn">audio stale</span> : null}
+          {doc.temporary && doc.hasAudio ? (
+            <button
+              type="button"
+              className="topbar-btn"
+              onClick={onKeep}
+              title="Keep this reading in your recordings"
+              data-testid="keep"
+            >
+              Save
+            </button>
+          ) : null}
           {doc.id && doc.hasAudio && !isSynth ? (
             <button
               type="button"

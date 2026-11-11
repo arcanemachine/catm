@@ -183,6 +183,15 @@ export async function deleteSession(id: string): Promise<void> {
   await database.delete("sessions", id);
 }
 
+/** Turns a temporary session into a saved one. */
+export async function keepSession(id: string): Promise<void> {
+  const database = await db();
+  const existing = await database.get("sessions", id);
+  if (!existing?.temporary) return;
+  const { temporary: _drop, ...rest } = existing;
+  await database.put("sessions", rest);
+}
+
 export async function deleteIfTemporary(id: string): Promise<void> {
   const database = await db();
   const existing = await database.get("sessions", id);

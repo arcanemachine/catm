@@ -16,6 +16,7 @@ import {
   deleteTemporarySessions,
   finalizeChunks,
   finalizeDuration,
+  keepSession,
   listSessions,
   measureStorage,
   renameSession,
@@ -582,6 +583,14 @@ export function App(): React.JSX.Element {
     URL.revokeObjectURL(url);
   }
 
+  async function onKeepSession(): Promise<void> {
+    const id = doc.id;
+    if (!id || !doc.temporary) return;
+    await keepSession(id);
+    setDoc((d) => (d.id === id ? { ...d, temporary: false } : d));
+    await refreshLibrary();
+  }
+
   async function onRenameSession(id: string, title: string): Promise<void> {
     await renameSession(id, title);
     await refreshLibrary();
@@ -791,6 +800,7 @@ export function App(): React.JSX.Element {
             onPlay={() => void onRead("play")}
             onRead={() => void onRead("save")}
             onCancel={onCancelSynth}
+            onKeep={() => void onKeepSession()}
             onRename={(id, t) => void onRenameSession(id, t)}
             liveChunkDurations={liveChunkDurations}
             liveChunkTexts={liveChunkTexts}
