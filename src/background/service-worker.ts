@@ -1,5 +1,4 @@
 const PENDING_KEY = "catm:pending-read";
-const ROOT_MENU_ID = "catm-root";
 const PAGE_MENU_ID = "catm-read-page";
 const SELECTION_MENU_ID = "catm-read-selection";
 
@@ -9,23 +8,20 @@ interface PendingRead {
   play: boolean;
 }
 
+// Chrome folds an extension's top-level items into a submenu when more than one
+// applies, so each context gets exactly one: "page" does not apply over a selection.
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: ROOT_MENU_ID,
-    title: "catm",
-    contexts: ["page", "selection"],
-  });
-  chrome.contextMenus.create({
-    id: SELECTION_MENU_ID,
-    parentId: ROOT_MENU_ID,
-    title: "Read selection",
-    contexts: ["selection"],
-  });
-  chrome.contextMenus.create({
-    id: PAGE_MENU_ID,
-    parentId: ROOT_MENU_ID,
-    title: "Read page",
-    contexts: ["page", "selection"],
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: SELECTION_MENU_ID,
+      title: "Read selection with catm",
+      contexts: ["selection"],
+    });
+    chrome.contextMenus.create({
+      id: PAGE_MENU_ID,
+      title: "Read page with catm",
+      contexts: ["page"],
+    });
   });
 });
 
