@@ -28,6 +28,12 @@ export default defineManifest({
   action: {
     default_title: "Open catm side panel",
   },
+  commands: {
+    popout: {
+      suggested_key: { default: "Ctrl+Shift+S" },
+      description: "Open catm in a tab",
+    },
+  },
   side_panel: {
     default_path: "src/sidepanel/index.html",
   },

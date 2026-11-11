@@ -2,9 +2,12 @@
 // bundled app in a tab via `chrome.tabs.create`, then closes the panel
 // so we never have two views fighting over the same OPFS / IDB.
 
+import { useEffect } from "react";
+import { POPOUT_MESSAGE, POPOUT_PAGE, type PopoutMessage } from "../runtime";
+
 async function popOut(): Promise<void> {
   if (typeof chrome === "undefined") return;
-  const url = chrome.runtime.getURL("src/sidepanel/index.html?ctx=tab");
+  const url = chrome.runtime.getURL(POPOUT_PAGE);
   try {
     await chrome.tabs.create({ url });
   } catch (err) {
@@ -17,6 +20,31 @@ async function popOut(): Promise<void> {
 }
 
 export function PopoutButton(): React.JSX.Element {
+  // The keyboard command reaches every extension page; only the panel in the
+  // command's window answers.
+  useEffect(() => {
+    if (typeof chrome === "undefined") return;
+    let windowId: number | undefined;
+    chrome.windows
+      .getCurrent()
+      .then((w) => {
+        windowId = w.id;
+      })
+      .catch((err) => console.error("[catm] windows.getCurrent:", err));
+    const onMessage = (
+      msg: PopoutMessage,
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (handled: boolean) => void,
+    ): void => {
+      if (msg?.type !== POPOUT_MESSAGE) return;
+      if (msg.windowId != null && msg.windowId !== windowId) return;
+      sendResponse(true);
+      void popOut();
+    };
+    chrome.runtime.onMessage.addListener(onMessage);
+    return () => chrome.runtime.onMessage.removeListener(onMessage);
+  }, []);
+
   return (
     <button
       type="button"

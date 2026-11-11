@@ -1,3 +1,5 @@
+import { POPOUT_MESSAGE, POPOUT_PAGE, type PopoutMessage } from "../runtime";
+
 const PENDING_KEY = "catm:pending-read";
 const PAGE_MENU_ID = "catm-read-page";
 const SELECTION_MENU_ID = "catm-read-selection";
@@ -65,4 +67,22 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       })
       .catch((err) => console.error("[catm] read page:", err));
   }
+});
+
+// The side panel in the command's window pops itself out (closing the panel);
+// with no panel there to answer, open the tab here.
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== "popout") return;
+  const msg: PopoutMessage = { type: POPOUT_MESSAGE, windowId: tab?.windowId };
+  const openTab = (): void => {
+    chrome.tabs
+      .create({ url: chrome.runtime.getURL(POPOUT_PAGE) })
+      .catch((err) => console.error("[catm] popout:", err));
+  };
+  chrome.runtime
+    .sendMessage(msg)
+    .then((handled) => {
+      if (handled !== true) openTab();
+    })
+    .catch(openTab);
 });
