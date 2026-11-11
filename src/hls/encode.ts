@@ -4,6 +4,7 @@ import {
   AudioSample,
   AudioSampleSource,
   BufferTarget,
+  canEncodeAudio,
   Mp4OutputFormat,
   Output,
   StreamTarget,
@@ -11,14 +12,37 @@ import {
 } from "mediabunny";
 
 export const ENCODE_SAMPLE_RATE = 48_000;
-export const AAC_FRAME_SIZE = 1024;
-export const AAC_BITRATE = 64_000;
+export const ENCODE_BITRATE = 64_000;
 
-const ENCODING_CONFIG = { codec: "aac" as const, bitrate: AAC_BITRATE };
+type EncodeCodec = "aac" | "opus";
+
+/** Samples per encoded frame at 48 kHz (Opus uses WebCodecs' default 20 ms frames). */
+const FRAME_SIZE: Record<EncodeCodec, number> = { aac: 1024, opus: 960 };
+
+let codecChoice: Promise<EncodeCodec> | null = null;
 
 /**
- * 2× linear upsampler. Kokoro emits 24000 Hz; Chrome's WebCodecs AAC encoder
- * only accepts 44100 or 48000 Hz. For 24000 → 48000 the ratio is exactly 2,
+ * AAC where the browser has an encoder for it; Opus otherwise. Chromium builds
+ * without proprietary codecs (e.g. ungoogled Chromium) can't encode AAC but can
+ * encode Opus and play Opus-in-MP4 through MSE.
+ */
+function pickCodec(): Promise<EncodeCodec> {
+  codecChoice ??= (async () => {
+    const options = {
+      numberOfChannels: 1,
+      sampleRate: ENCODE_SAMPLE_RATE,
+      bitrate: ENCODE_BITRATE,
+    };
+    if (await canEncodeAudio("aac", options)) return "aac";
+    if (await canEncodeAudio("opus", options)) return "opus";
+    throw new Error("This browser can encode neither AAC nor Opus audio");
+  })();
+  return codecChoice;
+}
+
+/**
+ * 2× linear upsampler. Kokoro emits 24000 Hz; WebCodecs' AAC and Opus encoders
+ * accept 48000 Hz. For 24000 → 48000 the ratio is exactly 2,
  * and linear interpolation introduces no aliasing (the source is band-limited
  * below 12 kHz, well under the new Nyquist).
  */
@@ -56,7 +80,7 @@ export async function encodePcmToCompleteMp4(
     format: new Mp4OutputFormat({ fastStart: "fragmented" }),
     target,
   });
-  const source = new AudioSampleSource(ENCODING_CONFIG);
+  const source = new AudioSampleSource({ codec: await pickCodec(), bitrate: ENCODE_BITRATE });
   output.addAudioTrack(source);
   await output.start();
   const sample = new AudioSample({
@@ -88,6 +112,7 @@ export class ProgressiveEncoder {
   private output: Output | null = null;
   private source: AudioSampleSource | null = null;
   private inputSampleRate: number;
+  private frameSize = 0;
 
   private buffer = new Uint8Array(0);
   private writtenEnd = 0;
@@ -110,6 +135,8 @@ export class ProgressiveEncoder {
   }
 
   async start(): Promise<void> {
+    const codec = await pickCodec();
+    this.frameSize = FRAME_SIZE[codec];
     const writable = new WritableStream<StreamTargetChunk>({
       write: (chunk) => {
         this.onBytes(chunk.data, chunk.position);
@@ -120,7 +147,7 @@ export class ProgressiveEncoder {
       format: new Mp4OutputFormat({ fastStart: "fragmented", minimumFragmentDuration: 2.0 }),
       target: new StreamTarget(writable),
     });
-    this.source = new AudioSampleSource(ENCODING_CONFIG);
+    this.source = new AudioSampleSource({ codec, bitrate: ENCODE_BITRATE });
     this.output.addAudioTrack(this.source);
     await this.output.start();
   }
@@ -195,7 +222,7 @@ export class ProgressiveEncoder {
         const fragStart = this.pendingMoofStart;
         const fragBytes = this.buffer.slice(fragStart, boxEnd);
         const sampleCount = readMoofSampleCount(this.buffer, fragStart, boxEnd);
-        const durationSec = (sampleCount * AAC_FRAME_SIZE) / ENCODE_SAMPLE_RATE;
+        const durationSec = (sampleCount * this.frameSize) / ENCODE_SAMPLE_RATE;
         const index = this.fragmentIndex++;
         this.pendingMoofStart = null;
         this.onFragment(index, fragBytes, durationSec);
