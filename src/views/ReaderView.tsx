@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AudioPlayer } from "../components/AudioPlayer";
 import { VoiceChip } from "../components/VoiceChip";
 import { attachHlsToAudio } from "../hls/playback";
+import { IS_SIDE_PANEL } from "../runtime";
 import type { SessionMeta } from "../storage/sessionStore";
 import { locateChunks } from "../textChunk";
 import type { AppStatus, DocState, PlayerCommand } from "../types";
@@ -339,6 +340,7 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
             value={doc.sourceText}
             onChange={onTextChange}
             activeRange={activeRange}
+            autoFocus={!IS_SIDE_PANEL}
             placeholder="Paste a chapter, an article, a long email — anything you'd rather hear than skim."
           />
 
@@ -439,6 +441,7 @@ interface EditableTextProps {
   onChange: (next: string) => void;
   activeRange: { start: number; end: number } | null;
   placeholder: string;
+  autoFocus: boolean;
 }
 
 const HIGHLIGHT_NAME = "catm-active-chunk";
@@ -448,8 +451,13 @@ function EditableText({
   onChange,
   activeRange,
   placeholder,
+  autoFocus,
 }: EditableTextProps): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus();
+  }, [autoFocus]);
 
   // Sync external value changes (loading a session, etc.) into the DOM
   // without disturbing the caret during local typing.
