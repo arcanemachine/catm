@@ -36,22 +36,6 @@ function post(msg: OutMsg, transfer: Transferable[] = []): void {
 const SAMPLE_RATE = 24000;
 const DEFAULT_VOICE: VoiceId = "af_heart";
 
-const device: LoadedDevice =
-  typeof navigator !== "undefined" && "gpu" in navigator ? "webgpu" : "wasm";
-
-const model = new KokoroModel({
-  device,
-  onProgress: (event) => {
-    post({
-      type: "progress",
-      status: event.status,
-      file: event.file,
-      loaded: event.loaded,
-      total: event.total,
-    });
-  },
-});
-
 interface GPUAdapterLike {
   features: { has: (name: string) => boolean } & Iterable<string>;
   info?: { description?: string; vendor?: string; architecture?: string };
@@ -65,21 +49,23 @@ interface AdapterRequester {
   requestAdapter: () => Promise<GPUAdapterLike | null>;
 }
 
-async function probeAdapter(): Promise<{
+interface AdapterInfo {
   name: string;
   vendor: string;
   features: string[];
-}> {
-  const empty = { name: "", vendor: "", features: [] as string[] };
+}
+
+/** The WebGPU adapter's details, or null when the browser exposes no adapter. */
+async function probeAdapter(): Promise<AdapterInfo | null> {
   const gpu = (navigator as unknown as { gpu?: AdapterRequester }).gpu;
-  if (!gpu) return empty;
+  if (!gpu) return null;
   let adapter: GPUAdapterLike | null;
   try {
     adapter = await gpu.requestAdapter();
   } catch {
-    return empty;
+    return null;
   }
-  if (!adapter) return empty;
+  if (!adapter) return null;
   let info: { description?: string; vendor?: string; architecture?: string } = {};
   if (adapter.info) info = adapter.info;
   else if (adapter.requestAdapterInfo) {
@@ -100,17 +86,32 @@ async function probeAdapter(): Promise<{
   return { name, vendor: info.vendor ?? "", features };
 }
 
+// `navigator.gpu` can exist with no adapter behind it (WebGPU blocklisted or
+// unavailable); only a real adapter selects WebGPU, else ONNX runs on WASM.
+const adapterProbe = probeAdapter();
+const device: Promise<LoadedDevice> = adapterProbe.then((a) => (a ? "webgpu" : "wasm"));
+
+const model = new KokoroModel({
+  device,
+  onProgress: (event) => {
+    post({
+      type: "progress",
+      status: event.status,
+      file: event.file,
+      loaded: event.loaded,
+      total: event.total,
+    });
+  },
+});
+
 async function load(): Promise<DeviceInfo> {
   const t0 = performance.now();
-  const [, adapter] = await Promise.all([
-    model.ensureLoaded(),
-    device === "webgpu" ? probeAdapter() : Promise.resolve({ name: "", vendor: "", features: [] }),
-  ]);
+  const [, adapter] = await Promise.all([model.ensureLoaded(), adapterProbe]);
   return {
-    device,
-    adapterName: adapter.name,
-    adapterVendor: adapter.vendor,
-    features: adapter.features,
+    device: adapter ? "webgpu" : "wasm",
+    adapterName: adapter?.name ?? "",
+    adapterVendor: adapter?.vendor ?? "",
+    features: adapter?.features ?? [],
     sessionInitMs: performance.now() - t0,
   };
 }

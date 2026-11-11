@@ -11,10 +11,12 @@ export type ProgressEvent = {
 
 export type ModelConfig = {
   model?: string;
-  device?: "webgpu" | "wasm";
+  device?: Device | Promise<Device>;
   dtype?: "fp32" | "fp16" | "q8" | "q4" | "q4f16";
   onProgress?: (event: ProgressEvent) => void;
 };
+
+type Device = "webgpu" | "wasm";
 
 const DEFAULT_MODEL = "onnx-community/Kokoro-82M-v1.0-ONNX";
 
@@ -27,7 +29,7 @@ type GenerateVoice = Parameters<KokoroTTS["generate"]>[1] extends infer O
 export class KokoroModel {
   private tts: KokoroTTS | null = null;
   private readonly model: string;
-  private readonly device: "webgpu" | "wasm";
+  private readonly device: Device | Promise<Device>;
   private readonly dtype: "fp32" | "fp16" | "q8" | "q4" | "q4f16";
   private readonly onProgress?: (event: ProgressEvent) => void;
 
@@ -42,7 +44,7 @@ export class KokoroModel {
     if (this.tts) return;
     this.tts = await KokoroTTS.from_pretrained(this.model, {
       dtype: this.dtype,
-      device: this.device,
+      device: await this.device,
       progress_callback: this.onProgress,
     });
   }
