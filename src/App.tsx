@@ -169,8 +169,8 @@ export function App(): React.JSX.Element {
     new Map<number, (r: { pcm: Float32Array; sampleRate: number }) => void>(),
   );
   const activeSynthsRef = useRef(new Map<number, ActiveSynth>());
-  // Text to play once the generation being cancelled has wound down (Ctrl-Enter mid-read).
-  const replayTextRef = useRef<string | null>(null);
+  // Play again once the generation being cancelled has wound down (Ctrl-Enter mid-read).
+  const replayAfterCancelRef = useRef(false);
   const progressMapRef = useRef<Map<string, { loaded: number; total: number }>>(new Map());
 
   const modified =
@@ -518,12 +518,10 @@ export function App(): React.JSX.Element {
       if (message === SYNTH_CANCELLED) {
         setStatus({ kind: "ready", device: deviceRef.current });
         await deleteSession(sessionId);
-        setDoc((d) => (d.id === sessionId ? EMPTY_DOC : d));
+        setDoc((d) => (d.id === sessionId ? { ...EMPTY_DOC, sourceText: d.sourceText } : d));
         await refreshLibrary();
-        const replay = replayTextRef.current;
-        if (replay !== null) {
-          replayTextRef.current = null;
-          setDoc({ ...EMPTY_DOC, sourceText: replay });
+        if (replayAfterCancelRef.current) {
+          replayAfterCancelRef.current = false;
           setAutoSynthPending(true);
         }
         return;
@@ -604,7 +602,7 @@ export function App(): React.JSX.Element {
     if (pendingNav || confirmReset) return;
     if (doc.sourceText.trim().length === 0) return;
     if (status.kind === "synthesising") {
-      replayTextRef.current = doc.sourceText;
+      replayAfterCancelRef.current = true;
       onCancelSynth();
       return;
     }
