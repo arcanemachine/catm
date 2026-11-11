@@ -26,6 +26,8 @@ concurrency:
 
 jobs:
   deploy:
+    # Upstream only: forks don't publish the marketing site.
+    if: github.repository == 'alainbrown/catm'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

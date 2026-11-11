@@ -41,7 +41,8 @@ concurrency:
 jobs:
   detect:
     # head_sha is the tested commit (workflow_run otherwise defaults to the branch head).
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Upstream only: forks build releases with build-extension.yml.
+    if: ${{ github.repository == 'alainbrown/catm' && github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.ver.outputs.changed }}
