@@ -30,6 +30,7 @@ interface ReaderViewProps {
   onChangeSpeed: (s: number) => void;
   sessions: SessionMeta[];
   shouldPlayToken: number;
+  pauseToken: number;
   showReadyStamp: boolean;
   voice: VoiceId;
   previewVoice: VoiceId | null;
@@ -55,6 +56,7 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
     onChangeSpeed,
     sessions,
     shouldPlayToken,
+    pauseToken,
     showReadyStamp,
     onTextChange,
     onPlay,
@@ -116,6 +118,11 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
       });
     }
   }, [shouldPlayToken, sessionId]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new token is the signal to pause
+  useEffect(() => {
+    audioRef.current?.pause();
+  }, [pauseToken]);
 
   const [currentTime, setCurrentTime] = useState(0);
 

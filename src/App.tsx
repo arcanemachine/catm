@@ -144,6 +144,7 @@ export function App(): React.JSX.Element {
     { kind: "open"; id: string } | { kind: "new" } | null
   >(null);
   const [playToken, setPlayToken] = useState(0);
+  const [pauseToken, setPauseToken] = useState(0);
   const [showReadyStamp, setShowReadyStamp] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -611,10 +612,11 @@ export function App(): React.JSX.Element {
   const playShortcutRef = useRef(onPlayShortcut);
   playShortcutRef.current = onPlayShortcut;
 
-  /** Escape cancels a generation, unless something else (a dialog, the drawer, an input) took it. */
+  /** Escape cancels a generation and pauses playback, unless a dialog, the drawer or an input took it. */
   function onCancelShortcut(): void {
     if (pendingNav || confirmReset || historyOpen) return;
     if (status.kind === "synthesising") onCancelSynth();
+    setPauseToken((t) => t + 1);
   }
   const cancelShortcutRef = useRef(onCancelShortcut);
   cancelShortcutRef.current = onCancelShortcut;
@@ -841,6 +843,7 @@ export function App(): React.JSX.Element {
             onChangeSpeed={setSpeed}
             sessions={sessions}
             shouldPlayToken={playToken}
+            pauseToken={pauseToken}
             showReadyStamp={showReadyStamp && doc.sourceText.length === 0 && !doc.id}
             voice={voice}
             previewVoice={previewVoice}
