@@ -14,6 +14,17 @@ function shouldCache(url: string): boolean {
   return CACHEABLE_HOST_HINTS.some((host) => url.includes(host));
 }
 
+// Some files arrive compressed with no Content-Length (HF gzips tokenizer.json);
+// transformers.js warns and can't show their progress without it.
+async function withContentLength(res: Response): Promise<Response> {
+  if (res.headers.has("Content-Length")) return res;
+  const body = await res.blob();
+  const headers = new Headers(res.headers);
+  headers.delete("Content-Encoding");
+  headers.set("Content-Length", String(body.size));
+  return new Response(body, { status: res.status, statusText: res.statusText, headers });
+}
+
 // Idempotent: safe to call multiple times. Patches `globalThis.fetch` once.
 let installed = false;
 export function installModelCacheFetch(): void {
@@ -30,7 +41,7 @@ export function installModelCacheFetch(): void {
     try {
       const cache = await caches.open(CACHE_NAME);
       const hit = await cache.match(url);
-      if (hit) return hit;
+      if (hit) return withContentLength(hit);
       const res = await original(input, init);
       if (res.ok && res.status === 200) {
         // Clone before consumer reads the body.
@@ -38,7 +49,7 @@ export function installModelCacheFetch(): void {
           /* quota / opaque — non-fatal */
         });
       }
-      return res;
+      return withContentLength(res);
     } catch {
       return original(input, init);
     }
