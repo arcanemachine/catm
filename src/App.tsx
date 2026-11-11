@@ -224,7 +224,7 @@ export function App(): React.JSX.Element {
     if (status.kind !== "ready") return;
     if (doc.sourceText.trim().length === 0) return;
     setAutoSynthPending(false);
-    void onRead();
+    void onRead("play");
   }, [autoSynthPending, status.kind, doc.sourceText]);
 
   // 1 Hz throughput rotation.
