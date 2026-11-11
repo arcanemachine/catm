@@ -44,6 +44,8 @@ export interface Orchestrator<V extends string = VoiceId> {
   start(txnId: number, sessionId: string, voice: V): Promise<void>;
   feed(text: string, isCancelled: () => boolean): Promise<void>;
   finish(): Promise<{ audioSec: number }>;
+  /** Stops encoding and deletes the session's audio files. */
+  abort(): Promise<void>;
 }
 
 export interface WorkerDeps<V extends string = VoiceId> {
@@ -86,8 +88,21 @@ export function createHandlers<V extends string = VoiceId>(deps: WorkerDeps<V>):
 
   function handleCancel(txnId: number): void {
     cancelledTxnIds.add(txnId);
-    if (active && active.txnId === txnId) active = null;
+    if (active && active.txnId === txnId) {
+      // Queued, so it runs once the in-flight piece has stopped writing.
+      const { orchestrator } = active;
+      active = null;
+      workQueue = workQueue.then(() => abortQuietly(orchestrator));
+    }
     deps.post({ type: "synth-cancelled", txnId });
+  }
+
+  async function abortQuietly(orchestrator: Orchestrator<V>): Promise<void> {
+    try {
+      await orchestrator.abort();
+    } catch (err) {
+      console.error("[worker] abort failed:", err);
+    }
   }
 
   async function handle(msg: InMsg<V>): Promise<void> {
@@ -106,11 +121,16 @@ export function createHandlers<V extends string = VoiceId>(deps: WorkerDeps<V>):
         return;
       }
       if (msg.type === "synth-start") {
+        // Cancelled before it started: never create the session's files.
+        if (cancelledTxnIds.has(msg.txnId)) return;
         await deps.load();
-        cancelledTxnIds.delete(msg.txnId);
         erroredTxnIds.delete(msg.txnId);
         const orchestrator = deps.createOrchestrator();
         await orchestrator.start(msg.txnId, msg.sessionId, msg.voice ?? deps.defaultVoice);
+        if (cancelledTxnIds.has(msg.txnId)) {
+          await abortQuietly(orchestrator);
+          return;
+        }
         active = { txnId: msg.txnId, orchestrator, startMs: performance.now() };
         return;
       }
@@ -150,6 +170,7 @@ export function createHandlers<V extends string = VoiceId>(deps: WorkerDeps<V>):
       deps.post(errMsg);
       if ("txnId" in msg && typeof msg.txnId === "number") {
         erroredTxnIds.add(msg.txnId);
+        if (active?.txnId === msg.txnId) await abortQuietly(active.orchestrator);
         active = null;
       }
     }

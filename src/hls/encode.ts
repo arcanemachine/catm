@@ -175,6 +175,13 @@ export class ProgressiveEncoder {
     this.drainBoxes();
   }
 
+  /** Stops encoding and releases the encoder; nothing more is emitted. */
+  async cancel(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    await this.output?.cancel();
+  }
+
   private onBytes(data: Uint8Array, position: number): void {
     const end = position + data.length;
     if (end > this.buffer.length) {

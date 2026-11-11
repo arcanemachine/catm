@@ -7,6 +7,16 @@ async function sessionDir(id: string): Promise<FileSystemDirectoryHandle> {
   return sessions.getDirectoryHandle(id, { create: true });
 }
 
+export async function removeSessionDir(id: string): Promise<void> {
+  const root = await navigator.storage.getDirectory();
+  const sessions = await root.getDirectoryHandle("sessions", { create: true });
+  try {
+    await sessions.removeEntry(id, { recursive: true });
+  } catch {
+    /* already gone */
+  }
+}
+
 async function writeBytes(id: string, name: string, bytes: Uint8Array): Promise<void> {
   const dir = await sessionDir(id);
   const handle = await dir.getFileHandle(name, { create: true });

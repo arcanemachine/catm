@@ -2,6 +2,7 @@ import { ProgressiveEncoder } from "../hls/encode";
 import {
   appendPlaylistEnd,
   appendPlaylistSegment,
+  removeSessionDir,
   writeInit,
   writePlaylistHeader,
   writeSegment,
@@ -54,6 +55,13 @@ export class AudioBuffer {
     await this.encoder.finish();
     await this.writes;
     await appendPlaylistEnd(this.sessionId, this.playlistPos);
+  }
+
+  /** Releases the encoder and deletes everything written for this session. */
+  async abort(): Promise<void> {
+    await this.encoder.cancel();
+    await this.writes.catch(() => {});
+    await removeSessionDir(this.sessionId);
   }
 
   segmentCount(): number {

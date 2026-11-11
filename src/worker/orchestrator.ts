@@ -47,6 +47,7 @@ export class Orchestrator {
       if (piece === null) break;
       if (isCancelled()) return;
       const pcm = await this.deps.model.generate(piece, this.voice);
+      if (isCancelled()) return;
       await audio.push(pcm);
       this.deps.post({
         type: "chunk-encoded",
@@ -63,6 +64,11 @@ export class Orchestrator {
     await this.audio.finish();
     if (this.audio.segmentCount() > 0) this.signalPlayback();
     return { audioSec: this.audio.audioSec() };
+  }
+
+  async abort(): Promise<void> {
+    await this.audio?.abort();
+    this.audio = null;
   }
 
   private signalPlayback(): void {
