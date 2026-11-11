@@ -1,0 +1,50 @@
+# Builds the catm Chrome extension when an ext-v<version> tag is pushed, and
+# attaches the zip to a GitHub Release. No Chrome Web Store publish.
+#
+# The tag must match package.json's version.
+
+name: Build extension
+
+on:
+  push:
+    tags: ["ext-v*"]
+
+permissions:
+  contents: write # to create GitHub releases
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches package.json version
+        id: ver
+        run: |
+          version=$(jq -r .version package.json)
+          if [ "$GITHUB_REF_NAME" != "ext-v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - name: Build extension bundle
+        run: npm run build
+
+      - name: Build release zip
+        run: ./scripts/package-extension.sh
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.ver.outputs.version }}"
+          gh release create "$GITHUB_REF_NAME" "catm-v$version.zip" \
+            --title "Extension v$version" \
+            --notes "Built from $GITHUB_SHA."
