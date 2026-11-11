@@ -4,7 +4,7 @@ import { VoiceChip } from "../components/VoiceChip";
 import { attachHlsToAudio } from "../hls/playback";
 import type { SessionMeta } from "../storage/sessionStore";
 import { locateChunks } from "../textChunk";
-import type { AppStatus, DocState } from "../types";
+import type { AppStatus, DocState, PlayerCommand } from "../types";
 import type { VoiceId } from "../worker/kokoro.worker";
 
 const WORDS_PER_MIN = 150;
@@ -30,7 +30,7 @@ interface ReaderViewProps {
   onChangeSpeed: (s: number) => void;
   sessions: SessionMeta[];
   shouldPlayToken: number;
-  pauseToken: number;
+  playerCommand: PlayerCommand | null;
   showReadyStamp: boolean;
   voice: VoiceId;
   previewVoice: VoiceId | null;
@@ -56,7 +56,7 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
     onChangeSpeed,
     sessions,
     shouldPlayToken,
-    pauseToken,
+    playerCommand,
     showReadyStamp,
     onTextChange,
     onPlay,
@@ -119,10 +119,32 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
     }
   }, [shouldPlayToken, sessionId]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new token is the signal to pause
   useEffect(() => {
-    audioRef.current?.pause();
-  }, [pauseToken]);
+    const audio = audioRef.current;
+    if (!audio || !playerCommand) return;
+    if (playerCommand.action === "toggle" && audio.paused) {
+      if (audio.ended) audio.currentTime = 0;
+      void audio.play().catch(() => {});
+    } else {
+      audio.pause();
+    }
+  }, [playerCommand]);
+
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    const a = audioRef.current;
+    setPlaying(false);
+    if (!a || !sessionId) return;
+    const sync = (): void => setPlaying(!a.paused);
+    a.addEventListener("play", sync);
+    a.addEventListener("pause", sync);
+    a.addEventListener("ended", sync);
+    return () => {
+      a.removeEventListener("play", sync);
+      a.removeEventListener("pause", sync);
+      a.removeEventListener("ended", sync);
+    };
+  }, [sessionId]);
 
   const [currentTime, setCurrentTime] = useState(0);
 
@@ -163,7 +185,41 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
   const savedDoc = doc.id !== null && !doc.temporary;
   const recordVerb =
     modified && savedDoc ? "Save & generate" : savedDoc ? "Generate again" : "Generate & save";
-  const playLabel = estMin > 0 ? `Play · ${estMin} min` : "Play";
+  // The audio on hand is for this text and voice, so Play pauses/resumes instead of regenerating.
+  const audioMatches = doc.hasAudio && !modified;
+  const playLabel = audioMatches
+    ? playing
+      ? "Pause"
+      : "Resume"
+    : estMin > 0
+      ? `Play · ${estMin} min`
+      : "Play";
+  const playButton = (
+    <button
+      type="button"
+      className="send"
+      onClick={onPlay}
+      disabled={!audioMatches && !canRead}
+      data-testid="play"
+      title={
+        audioMatches
+          ? "Play or pause (Ctrl+Enter); Esc pauses"
+          : "Generate and play without saving (Ctrl+Enter)"
+      }
+    >
+      {audioMatches && playing ? (
+        <svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">
+          <rect x="1" y="1" width="3" height="10" rx="0.8" />
+          <rect x="7" y="1" width="3" height="10" rx="0.8" />
+        </svg>
+      ) : (
+        <svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">
+          <path d="M1 1.2v9.6a.6.6 0 0 0 .9.5l8.2-4.8a.6.6 0 0 0 0-1L1.9.7a.6.6 0 0 0-.9.5z" />
+        </svg>
+      )}
+      {playLabel}
+    </button>
+  );
 
   const title = session?.title ?? (doc.sourceText.length > 0 ? "Untitled draft" : null);
 
@@ -297,19 +353,22 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
             />
             <span className="spacer" />
             {isSynth ? (
-              <button
-                type="button"
-                className="send cancel"
-                onClick={onCancel}
-                data-testid="cancel"
-                aria-label="Cancel generating"
-                title="Cancel generating (Esc)"
-              >
-                <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
-                  <rect x="1" y="1" width="10" height="10" rx="1.5" />
-                </svg>
-                Cancel
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="send cancel"
+                  onClick={onCancel}
+                  data-testid="cancel"
+                  aria-label="Cancel generating"
+                  title="Cancel generating"
+                >
+                  <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
+                    <rect x="1" y="1" width="10" height="10" rx="1.5" />
+                  </svg>
+                  Cancel
+                </button>
+                {audioMatches ? playButton : null}
+              </>
             ) : (
               <>
                 <button
@@ -336,19 +395,7 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
                   </svg>
                   {recordVerb}
                 </button>
-                <button
-                  type="button"
-                  className="send"
-                  onClick={onPlay}
-                  disabled={!canRead}
-                  data-testid="play"
-                  title="Generate and play without saving (Ctrl+Enter)"
-                >
-                  <svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">
-                    <path d="M1 1.2v9.6a.6.6 0 0 0 .9.5l8.2-4.8a.6.6 0 0 0 0-1L1.9.7a.6.6 0 0 0-.9.5z" />
-                  </svg>
-                  {playLabel}
-                </button>
+                {playButton}
               </>
             )}
           </div>

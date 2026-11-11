@@ -84,8 +84,8 @@ test("catm full journey on the loaded extension", async () => {
       }, ARTICLE_HTML);
       await expect(page.getByTestId("text-input")).toContainText("runs entirely in your browser");
 
-      // Read selection (play=true): stages text and auto-synths once ready — no
-      // speak.click(). This drives the read-aloud path end to end.
+      // Read selection (play=true): stages text and auto-plays once ready — no
+      // click. This drives the read-aloud path end to end.
       await sw.evaluate((text: string) => {
         (globalThis as never as { __catmStage: (p: unknown) => void }).__catmStage({
           text,
@@ -188,7 +188,10 @@ test("catm full journey on the loaded extension", async () => {
         `only ${(stats.loudFraction * 100).toFixed(1)}% of samples are loud — looks like a click, not speech`,
       ).toBeGreaterThan(0.05);
 
+      // Read selection plays a temporary reading: out of the library until Save keeps it.
       const libraryRow = page.getByTestId("library-row");
+      await expect(libraryRow).toHaveCount(0);
+      await page.getByTestId("keep").click();
       await expect(libraryRow).toHaveCount(1);
       await expect(libraryRow.locator(".voice-tag")).toHaveText("am_michael");
 

@@ -19,6 +19,12 @@ export interface DocState {
   temporary: boolean; // the session is a played-once reading, not kept in the library
 }
 
+/** A request to the reader's player; `seq` makes each request distinct. */
+export interface PlayerCommand {
+  action: "toggle" | "pause";
+  seq: number;
+}
+
 export interface PerfState {
   device: DeviceInfo | null;
   synthSamplesPerSec: number[]; // 60 samples of PCM samples/sec

@@ -25,7 +25,7 @@ import {
   type SessionMeta,
   type StorageBreakdown,
 } from "./storage/sessionStore";
-import type { AppStatus, DocState, PerfState } from "./types";
+import type { AppStatus, DocState, PerfState, PlayerCommand } from "./types";
 import { OnboardingView } from "./views/OnboardingView";
 import { ReaderView } from "./views/ReaderView";
 import type { InMsg, KokoroWorkerConfig, OutMsg, VoiceId } from "./worker/kokoro.worker";
@@ -144,7 +144,7 @@ export function App(): React.JSX.Element {
     { kind: "open"; id: string } | { kind: "new" } | null
   >(null);
   const [playToken, setPlayToken] = useState(0);
-  const [pauseToken, setPauseToken] = useState(0);
+  const [playerCommand, setPlayerCommand] = useState<PlayerCommand | null>(null);
   const [showReadyStamp, setShowReadyStamp] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -598,10 +598,18 @@ export function App(): React.JSX.Element {
     URL.revokeObjectURL(url);
   }
 
-  /** Ctrl/Cmd-Enter: play the current text, cancelling a generation in progress first. */
-  function onPlayShortcut(): void {
+  /**
+   * Play button and Ctrl/Cmd-Enter: play/pause while the audio matches the text and voice;
+   * otherwise generate the current text, cancelling a generation in progress first.
+   */
+  function onPlayToggle(): void {
     if (pendingNav || confirmReset) return;
     if (doc.sourceText.trim().length === 0) return;
+    if (doc.id !== null && !modified) {
+      // Audio for this text exists or is on its way (playback starts by itself).
+      if (doc.hasAudio) setPlayerCommand((c) => ({ action: "toggle", seq: (c?.seq ?? 0) + 1 }));
+      return;
+    }
     if (status.kind === "synthesising") {
       replayAfterCancelRef.current = true;
       onCancelSynth();
@@ -609,28 +617,27 @@ export function App(): React.JSX.Element {
     }
     if (status.kind === "ready") void onRead("play");
   }
-  const playShortcutRef = useRef(onPlayShortcut);
-  playShortcutRef.current = onPlayShortcut;
+  const playToggleRef = useRef(onPlayToggle);
+  playToggleRef.current = onPlayToggle;
 
-  /** Escape cancels a generation and pauses playback, unless a dialog, the drawer or an input took it. */
-  function onCancelShortcut(): void {
+  /** Escape pauses, unless a dialog, the drawer or an input took it. */
+  function onPauseShortcut(): void {
     if (pendingNav || confirmReset || historyOpen) return;
-    if (status.kind === "synthesising") onCancelSynth();
-    setPauseToken((t) => t + 1);
+    setPlayerCommand((c) => ({ action: "pause", seq: (c?.seq ?? 0) + 1 }));
   }
-  const cancelShortcutRef = useRef(onCancelShortcut);
-  cancelShortcutRef.current = onCancelShortcut;
+  const pauseShortcutRef = useRef(onPauseShortcut);
+  pauseShortcutRef.current = onPauseShortcut;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.repeat) return;
       if (e.key === "Escape" && !e.defaultPrevented) {
-        cancelShortcutRef.current();
+        pauseShortcutRef.current();
         return;
       }
       if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
-      playShortcutRef.current();
+      playToggleRef.current();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -843,7 +850,7 @@ export function App(): React.JSX.Element {
             onChangeSpeed={setSpeed}
             sessions={sessions}
             shouldPlayToken={playToken}
-            pauseToken={pauseToken}
+            playerCommand={playerCommand}
             showReadyStamp={showReadyStamp && doc.sourceText.length === 0 && !doc.id}
             voice={voice}
             previewVoice={previewVoice}
@@ -851,7 +858,7 @@ export function App(): React.JSX.Element {
               dismissReadyStamp();
               setDoc((d) => ({ ...d, sourceText: t }));
             }}
-            onPlay={() => void onRead("play")}
+            onPlay={onPlayToggle}
             onRead={() => void onRead("save")}
             onCancel={onCancelSynth}
             onKeep={() => void onKeepSession()}
