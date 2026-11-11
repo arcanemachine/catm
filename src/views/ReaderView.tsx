@@ -334,7 +334,7 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
                   onClick={onPlay}
                   disabled={!canRead}
                   data-testid="play"
-                  title="Generate and play without saving"
+                  title="Generate and play without saving (Ctrl+Enter)"
                 >
                   <svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">
                     <path d="M1 1.2v9.6a.6.6 0 0 0 .9.5l8.2-4.8a.6.6 0 0 0 0-1L1.9.7a.6.6 0 0 0-.9.5z" />

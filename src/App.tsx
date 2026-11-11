@@ -168,6 +168,8 @@ export function App(): React.JSX.Element {
     new Map<number, (r: { pcm: Float32Array; sampleRate: number }) => void>(),
   );
   const activeSynthsRef = useRef(new Map<number, ActiveSynth>());
+  // Text to play once the generation being cancelled has wound down (Ctrl-Enter mid-read).
+  const replayTextRef = useRef<string | null>(null);
   const progressMapRef = useRef<Map<string, { loaded: number; total: number }>>(new Map());
 
   const modified =
@@ -516,6 +518,12 @@ export function App(): React.JSX.Element {
         await deleteSession(sessionId);
         setDoc((d) => (d.id === sessionId ? EMPTY_DOC : d));
         await refreshLibrary();
+        const replay = replayTextRef.current;
+        if (replay !== null) {
+          replayTextRef.current = null;
+          setDoc({ ...EMPTY_DOC, sourceText: replay });
+          setAutoSynthPending(true);
+        }
         return;
       }
       setStatus({ kind: "error", message });
@@ -582,6 +590,30 @@ export function App(): React.JSX.Element {
     a.remove();
     URL.revokeObjectURL(url);
   }
+
+  /** Ctrl/Cmd-Enter: play the current text, cancelling a generation in progress first. */
+  function onPlayShortcut(): void {
+    if (pendingNav || confirmReset) return;
+    if (doc.sourceText.trim().length === 0) return;
+    if (status.kind === "synthesising") {
+      replayTextRef.current = doc.sourceText;
+      onCancelSynth();
+      return;
+    }
+    if (status.kind === "ready") void onRead("play");
+  }
+  const playShortcutRef = useRef(onPlayShortcut);
+  playShortcutRef.current = onPlayShortcut;
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || e.repeat) return;
+      e.preventDefault();
+      playShortcutRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   async function onKeepSession(): Promise<void> {
     const id = doc.id;
