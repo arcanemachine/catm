@@ -1,3 +1,4 @@
+import { AutoTokenizer, StyleTextToSpeech2Model } from "@huggingface/transformers";
 import { KokoroTTS } from "kokoro-js";
 import { phonemize } from "phonemizer";
 import type { VoiceId } from "./types";
@@ -42,11 +43,18 @@ export class KokoroModel {
 
   async ensureLoaded(): Promise<void> {
     if (this.tts) return;
-    this.tts = await KokoroTTS.from_pretrained(this.model, {
-      dtype: this.dtype,
-      device: await this.device,
-      progress_callback: this.onProgress,
-    });
+    // KokoroTTS.from_pretrained, plus session options it doesn't pass through:
+    // ONNX Runtime warns on every session load; log errors only.
+    const [model, tokenizer] = await Promise.all([
+      StyleTextToSpeech2Model.from_pretrained(this.model, {
+        dtype: this.dtype,
+        device: await this.device,
+        progress_callback: this.onProgress,
+        session_options: { logSeverityLevel: 3 },
+      }),
+      AutoTokenizer.from_pretrained(this.model, { progress_callback: this.onProgress }),
+    ]);
+    this.tts = new KokoroTTS(model, tokenizer);
   }
 
   async generate(text: string, voice: VoiceId): Promise<Float32Array> {
