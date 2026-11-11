@@ -207,6 +207,24 @@ export async function deleteTemporarySessions(createdBefore: number): Promise<vo
   }
 }
 
+/** Audio folders with no session record: left by a cancel or a crash mid-write. */
+export async function deleteOrphanAudio(): Promise<void> {
+  const database = await db();
+  const known = new Set(await database.getAllKeys("sessions"));
+  const root = await sessionsRoot();
+  const orphans: string[] = [];
+  for await (const name of root.keys()) {
+    if (!known.has(name)) orphans.push(name);
+  }
+  for (const name of orphans) {
+    try {
+      await root.removeEntry(name, { recursive: true });
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
 function formatStampForFilename(ms: number): string {
   const d = new Date(ms);
   const pad = (n: number): string => n.toString().padStart(2, "0");

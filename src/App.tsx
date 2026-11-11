@@ -12,6 +12,7 @@ import {
   buildSessionExport,
   createSession,
   deleteIfTemporary,
+  deleteOrphanAudio,
   deleteSession,
   deleteTemporarySessions,
   finalizeChunks,
@@ -189,7 +190,7 @@ export function App(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    void deleteTemporarySessions(Date.now()).then(refreshLibrary);
+    void deleteTemporarySessions(Date.now()).then(deleteOrphanAudio).then(refreshLibrary);
   }, [refreshLibrary]);
 
   // A temporary reading is gone once the reader moves off it.
@@ -475,8 +476,9 @@ export function App(): React.JSX.Element {
     setLiveChunkDurations([]);
 
     const temporary = mode === "play";
+    const regenerating = !temporary && doc.id !== null && !doc.temporary;
     let sessionId: string;
-    if (!temporary && doc.id && !doc.temporary) {
+    if (regenerating && doc.id) {
       sessionId = doc.id;
       await resetSession(sessionId, trimmed, voice);
     } else {
@@ -527,6 +529,12 @@ export function App(): React.JSX.Element {
         return;
       }
       setStatus({ kind: "error", message });
+      // A reading this generation created has no usable audio; a regenerated one keeps its text.
+      if (!regenerating) {
+        await deleteSession(sessionId);
+        setDoc((d) => (d.id === sessionId ? { ...EMPTY_DOC, sourceText: d.sourceText } : d));
+        await refreshLibrary();
+      }
     }
   }
 
