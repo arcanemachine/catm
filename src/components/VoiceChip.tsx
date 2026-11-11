@@ -14,6 +14,7 @@ const VOICES: VoiceOption[] = [
   { id: "af_bella", name: "Bella", desc: "af_bella · feminine · bright", gender: "f" },
   { id: "am_michael", name: "Michael", desc: "am_michael · masculine · low", gender: "m" },
   { id: "am_eric", name: "Eric", desc: "am_eric · masculine · mid", gender: "m" },
+  { id: "am_onyx", name: "Onyx", desc: "am_onyx · masculine", gender: "m" },
 ];
 
 interface VoiceChipProps {

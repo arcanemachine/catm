@@ -63,7 +63,14 @@ function writeSpeed(s: number): void {
 function readVoice(): VoiceId {
   try {
     const v = localStorage.getItem(VOICE_KEY);
-    if (v === "af_heart" || v === "af_bella" || v === "am_michael" || v === "am_eric") return v;
+    if (
+      v === "af_heart" ||
+      v === "af_bella" ||
+      v === "am_michael" ||
+      v === "am_eric" ||
+      v === "am_onyx"
+    )
+      return v;
   } catch {
     /* ignore */
   }
