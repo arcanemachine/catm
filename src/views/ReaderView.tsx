@@ -296,6 +296,7 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
                 onClick={onCancel}
                 data-testid="cancel"
                 aria-label="Cancel generating"
+                title="Cancel generating (Esc)"
               >
                 <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
                   <rect x="1" y="1" width="10" height="10" rx="1.5" />

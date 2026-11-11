@@ -613,9 +613,22 @@ export function App(): React.JSX.Element {
   const playShortcutRef = useRef(onPlayShortcut);
   playShortcutRef.current = onPlayShortcut;
 
+  /** Escape cancels a generation, unless something else (a dialog, the drawer, an input) took it. */
+  function onCancelShortcut(): void {
+    if (pendingNav || confirmReset || historyOpen) return;
+    if (status.kind === "synthesising") onCancelSynth();
+  }
+  const cancelShortcutRef = useRef(onCancelShortcut);
+  cancelShortcutRef.current = onCancelShortcut;
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || e.repeat) return;
+      if (e.repeat) return;
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        cancelShortcutRef.current();
+        return;
+      }
+      if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
       playShortcutRef.current();
     };
