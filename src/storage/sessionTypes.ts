@@ -17,6 +17,8 @@ export interface SessionMeta {
   titleEdited?: boolean;
   chunkDurations?: number[];
   chunkTexts?: string[];
+  /** Played once and not kept: hidden from the library, deleted when the reader leaves it. */
+  temporary?: boolean;
 }
 
 export interface StorageBreakdown {

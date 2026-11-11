@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrandMark } from "./components/BrandMark";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { DiscardDialog } from "./components/DiscardDialog";
@@ -11,7 +11,9 @@ import { IS_SIDE_PANEL } from "./runtime";
 import {
   buildSessionExport,
   createSession,
+  deleteIfTemporary,
   deleteSession,
+  deleteTemporarySessions,
   finalizeChunks,
   finalizeDuration,
   listSessions,
@@ -91,6 +93,7 @@ const EMPTY_DOC: DocState = {
   savedText: "",
   hasAudio: false,
   audioVoice: null,
+  temporary: false,
 };
 
 const ONBOARDED_KEY = "catm:onboarded";
@@ -172,6 +175,7 @@ export function App(): React.JSX.Element {
   const refreshLibrary = useCallback(async () => {
     setSessions(await listSessions());
   }, []);
+  const savedSessions = useMemo(() => sessions.filter((s) => !s.temporary), [sessions]);
 
   const refreshStorage = useCallback(async () => {
     try {
@@ -182,8 +186,16 @@ export function App(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    void refreshLibrary();
+    void deleteTemporarySessions(Date.now()).then(refreshLibrary);
   }, [refreshLibrary]);
+
+  // A temporary reading is gone once the reader moves off it.
+  const prevDocIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevDocIdRef.current;
+    prevDocIdRef.current = doc.id;
+    if (prev && prev !== doc.id) void deleteIfTemporary(prev).then(refreshLibrary);
+  }, [doc.id, refreshLibrary]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: sessions.length is the fingerprint that re-triggers measurement
   useEffect(() => {
@@ -449,7 +461,8 @@ export function App(): React.JSX.Element {
     writeVoice(v);
   }
 
-  async function onRead(): Promise<void> {
+  /** "play" generates a temporary reading; "save" generates one kept in the library. */
+  async function onRead(mode: "play" | "save" = "save"): Promise<void> {
     const trimmed = doc.sourceText.trim();
     if (!trimmed || status.kind !== "ready") return;
     const w = workerRef.current;
@@ -458,12 +471,13 @@ export function App(): React.JSX.Element {
     setStatus({ kind: "synthesising" });
     setLiveChunkDurations([]);
 
+    const temporary = mode === "play";
     let sessionId: string;
-    if (doc.id) {
+    if (!temporary && doc.id && !doc.temporary) {
       sessionId = doc.id;
       await resetSession(sessionId, trimmed, voice);
     } else {
-      const meta = await createSession({ sourceText: trimmed, voice });
+      const meta = await createSession({ sourceText: trimmed, voice, temporary });
       sessionId = meta.id;
     }
     setDoc({
@@ -472,6 +486,7 @@ export function App(): React.JSX.Element {
       savedText: trimmed,
       hasAudio: false,
       audioVoice: voice,
+      temporary,
     });
 
     const txnId = nextTxnIdRef.current++;
@@ -525,6 +540,7 @@ export function App(): React.JSX.Element {
       savedText: sourceText,
       hasAudio: true,
       audioVoice: session?.voice ?? null,
+      temporary: false,
     });
   }
 
@@ -742,7 +758,7 @@ export function App(): React.JSX.Element {
         </header>
         {IS_SIDE_PANEL ? null : (
           <Rail
-            sessions={sessions}
+            sessions={savedSessions}
             activeId={doc.id}
             recordingId={status.kind === "synthesising" ? doc.id : null}
             modified={modified}
@@ -772,7 +788,8 @@ export function App(): React.JSX.Element {
               dismissReadyStamp();
               setDoc((d) => ({ ...d, sourceText: t }));
             }}
-            onRead={onRead}
+            onPlay={() => void onRead("play")}
+            onRead={() => void onRead("save")}
             onCancel={onCancelSynth}
             onRename={(id, t) => void onRenameSession(id, t)}
             liveChunkDurations={liveChunkDurations}
@@ -788,7 +805,7 @@ export function App(): React.JSX.Element {
         <HistoryDrawer
           open={historyOpen}
           onClose={() => setHistoryOpen(false)}
-          sessions={sessions}
+          sessions={savedSessions}
           activeId={doc.id}
           recordingId={status.kind === "synthesising" ? doc.id : null}
           modified={modified}

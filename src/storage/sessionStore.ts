@@ -68,6 +68,7 @@ function deriveTitle(sourceText: string): string {
 export interface CreateSessionInput {
   sourceText: string;
   voice: VoiceId;
+  temporary?: boolean;
 }
 
 export async function createSession(input: CreateSessionInput): Promise<SessionMeta> {
@@ -85,6 +86,7 @@ export async function createSession(input: CreateSessionInput): Promise<SessionM
     finishedAt: null,
     voice: input.voice,
     modelId: DEFAULT_MODEL,
+    ...(input.temporary ? { temporary: true } : {}),
   };
   const database = await db();
   await database.put("sessions", meta);
@@ -179,6 +181,21 @@ export async function deleteSession(id: string): Promise<void> {
   }
   const database = await db();
   await database.delete("sessions", id);
+}
+
+export async function deleteIfTemporary(id: string): Promise<void> {
+  const database = await db();
+  const existing = await database.get("sessions", id);
+  if (existing?.temporary) await deleteSession(id);
+}
+
+/** Temporary sessions left behind when the panel closed mid-read. */
+export async function deleteTemporarySessions(createdBefore: number): Promise<void> {
+  const database = await db();
+  const rows = await database.getAll("sessions");
+  for (const s of rows) {
+    if (s.temporary && s.createdAt < createdBefore) await deleteSession(s.id);
+  }
 }
 
 function formatStampForFilename(ms: number): string {

@@ -34,6 +34,7 @@ interface ReaderViewProps {
   voice: VoiceId;
   previewVoice: VoiceId | null;
   onTextChange: (text: string) => void;
+  onPlay: () => void;
   onRead: () => void;
   onCancel: () => void;
   onRename: (id: string, title: string) => void;
@@ -55,6 +56,7 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
     shouldPlayToken,
     showReadyStamp,
     onTextChange,
+    onPlay,
     onRead,
     onCancel,
     onRename,
@@ -149,14 +151,10 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
     return ranges[idx] ?? null;
   }, [doc.sourceText, durations, texts, currentTime]);
 
-  const recordVerb = isSynth
-    ? "Cancel"
-    : modified && doc.id
-      ? "Save & generate"
-      : doc.id
-        ? "Generate again"
-        : "Generate";
-  const recordLabel = !isSynth && estMin > 0 ? `${recordVerb} · ${estMin} min` : recordVerb;
+  const savedDoc = doc.id !== null && !doc.temporary;
+  const recordVerb =
+    modified && savedDoc ? "Save & generate" : savedDoc ? "Generate again" : "Generate & save";
+  const playLabel = estMin > 0 ? `Play · ${estMin} min` : "Play";
 
   const title = session?.title ?? (doc.sourceText.length > 0 ? "Untitled draft" : null);
 
@@ -207,7 +205,9 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
             </span>
           ) : null}
           {session && !modified ? (
-            <span className="topbar-meta">saved {formatDate(session.createdAt)}</span>
+            <span className="topbar-meta">
+              {doc.temporary ? "not saved" : `saved ${formatDate(session.createdAt)}`}
+            </span>
           ) : null}
         </div>
         <div className="right">
@@ -276,36 +276,60 @@ export function ReaderView(props: ReaderViewProps): React.JSX.Element {
               disabled={isSynth}
             />
             <span className="spacer" />
-            <button
-              type="button"
-              className={isSynth ? "send cancel" : modified && doc.id ? "send save" : "send"}
-              onClick={() => (isSynth ? onCancel() : onRead())}
-              disabled={!isSynth && !canRead}
-              data-testid="speak"
-              aria-label={isSynth ? "Cancel generating" : undefined}
-            >
-              {isSynth ? (
+            {isSynth ? (
+              <button
+                type="button"
+                className="send cancel"
+                onClick={onCancel}
+                data-testid="cancel"
+                aria-label="Cancel generating"
+              >
                 <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
                   <rect x="1" y="1" width="10" height="10" rx="1.5" />
                 </svg>
-              ) : (
-                /* Waveform / equalizer bars — communicates "produce audio"
-                   rather than "play existing audio". */
-                <svg
-                  width="14"
-                  height="12"
-                  viewBox="0 0 16 14"
-                  aria-hidden="true"
-                  fill="currentColor"
+                Cancel
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={modified && savedDoc ? "send save" : "send secondary"}
+                  onClick={onRead}
+                  disabled={!canRead}
+                  data-testid="speak"
+                  title="Generate and keep it in your recordings"
                 >
-                  <rect x="1" y="5" width="2" height="4" rx="1" />
-                  <rect x="5" y="2" width="2" height="10" rx="1" />
-                  <rect x="9" y="4" width="2" height="6" rx="1" />
-                  <rect x="13" y="6" width="2" height="2" rx="1" />
-                </svg>
-              )}
-              {recordLabel}
-            </button>
+                  {/* Waveform / equalizer bars — communicates "produce audio"
+                      rather than "play existing audio". */}
+                  <svg
+                    width="14"
+                    height="12"
+                    viewBox="0 0 16 14"
+                    aria-hidden="true"
+                    fill="currentColor"
+                  >
+                    <rect x="1" y="5" width="2" height="4" rx="1" />
+                    <rect x="5" y="2" width="2" height="10" rx="1" />
+                    <rect x="9" y="4" width="2" height="6" rx="1" />
+                    <rect x="13" y="6" width="2" height="2" rx="1" />
+                  </svg>
+                  {recordVerb}
+                </button>
+                <button
+                  type="button"
+                  className="send"
+                  onClick={onPlay}
+                  disabled={!canRead}
+                  data-testid="play"
+                  title="Generate and play without saving"
+                >
+                  <svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">
+                    <path d="M1 1.2v9.6a.6.6 0 0 0 .9.5l8.2-4.8a.6.6 0 0 0 0-1L1.9.7a.6.6 0 0 0-.9.5z" />
+                  </svg>
+                  {playLabel}
+                </button>
+              </>
+            )}
           </div>
         </div>
 

@@ -1236,6 +1236,15 @@ textarea {
 .send.save:hover:not(:disabled) {
   background: var(--ink-1);
 }
+.send.secondary {
+  background: var(--bg-1);
+  color: var(--ink-1);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.send.secondary:hover:not(:disabled) {
+  background: var(--bg-2);
+}
 .send.cancel {
   background: var(--danger);
   border-color: var(--danger);

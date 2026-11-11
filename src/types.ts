@@ -16,6 +16,7 @@ export interface DocState {
   savedText: string;
   hasAudio: boolean; // when true, ReaderView attaches hls.js to this session's id
   audioVoice: VoiceId | null; // voice the saved audio was recorded with
+  temporary: boolean; // the session is a played-once reading, not kept in the library
 }
 
 export interface PerfState {
